@@ -1,0 +1,168 @@
+---
+title: "PML_Project"
+author: "R. Hosek"
+date: "February 27, 2016"
+output: html_document
+---
+##Final Project: Coursera Practical Machine Learning
+
+###Executive Summary:
+
+###Problem Statement (quoted from the source):
+
+####Background
+
+####Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+####The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. 
+####The five possible 'manners' are:
+>####  A. exactly according to the specifications
+####  B. throwing the elbows to the front
+####  C. lifting the dumbbell only halfway
+####  D. lowering the dumbbell only halfway
+>####  E. throwing the hips to the front
+
+####You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+####Data
+
+####The training data for this project are available here:
+
+####https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+####The test data are available here:
+
+####https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+####The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+
+#####Training and Testing data files previously downloaded to working directory from above-cited urls
+###Get the data
+```{r cache=TRUE}
+w <- setwd("~/GitHub/practical-machine-learning")
+
+train_0 <- read.csv("pml-training.csv", header = TRUE, na.strings = c('NA', '', '#DIV/0!'))
+test_0  <- read.csv("pml-testing.csv", header = TRUE, na.strings = c('NA', '', '#DIV/0!'))
+```
+
+###Explore and Clean the Data
+####First, check to see if two data sets have same variables (except for the last one, which we know is different)
+```{r highlight=TRUE}
+
+n_tr <- names(train_0)
+n_te <- names(test_0)
+
+all.equal(n_tr[length(n_tr)-1],n_te[length(n_te)-1])
+```
+####That looks fine; now preview the data
+
+```{r highlight=TRUE}
+
+str(train_0)
+```
+####There appear to be many NA values; let's remove these 
+
+```{r highlight=TRUE}
+
+NAs <- apply(train_0, 2, function(x) {sum(is.na(x))})
+train_1 <- train_0[which(NAs == 0)]
+
+NAs <- apply(test_0, 2, function(x) {sum(is.na(x))})
+test_1 <- test_0[which(NAs == 0)]
+```
+
+####Next, remove the first 7 variables which will not be used
+
+```{r highlight=TRUE}  
+  
+train_1 <- train_1[, 8:length(colnames(train_1))]
+test_1 <- test_1[, 8:length(colnames(test_1))]
+
+```
+####Check for congruity
+
+```{r highlight=TRUE}
+
+names(train_1)
+names(test_1)
+
+```
+####This checks out OK.
+### Load Caret 
+##Preprocessing: Imputation of missing data and checking for near-zero variance 
+####Applies only to numeric variables
+
+```{r highlight=TRUE}
+library(caret)
+var_num <- which(lapply(train_1, class) %in% "numeric")
+var_preproc <- preProcess(train_1[,var_num], method = c("knnImpute", "center", "scale"))
+train_2 <- predict(var_preproc, train_1[,var_num])
+train_2$classe <- train_1$classe
+test_2 <- predict(var_preproc, test_1[, var_num])
+
+
+nzv_train <- nearZeroVar(train_2, saveMetrics = TRUE)
+train_3 <- train_2[, nzv_train$nzv == FALSE]
+
+nzv_test  <- nearZeroVar(test_2, saveMetrics = TRUE)
+test_3 <- test_2[, nzv_test$nzv == FALSE]
+
+dim(train_3)
+dim(test_3)
+
+```
+####Near-zero variance not an issue; all variables retained
+###Next, partition training set to use cross-validation
+
+
+```{r highlight=TRUE}
+library(randomForest)
+library(caret)
+library(e1071)
+set.seed(92542)
+train_tot <- createDataPartition(train_3$classe, p = .75, list=FALSE)
+train_tr <- train_3[train_tot,]
+test_tr  <- train_3[-train_tot,]
+
+```
+Based on the lectures, the forum and reading, RANDOM FORESTS seems to be the best initial approach
+
+
+```{r highlight=TRUE, cache=TRUE}
+
+model_1<-train(classe~.,data=train_tr, method="rf", trControl=trainControl(method="cv"), number=5,  allowParallel=TRUE)
+              
+print(model_1)
+
+```
+###What is the prediction accuracy for the traing and cross-validation test sets?
+####First, for the training set
+
+```{r highlight=TRUE}
+pred_tr <- predict(model_1, train_tr)
+confusionMatrix(pred_tr, train_tr$classe)                  
+
+```
+
+####Next, for the cross-validation test set
+
+
+```{r highlight=TRUE}
+pred_cv_test <- predict(model_1, test_tr)
+confusionMatrix(pred_cv_test, test_tr$classe)
+
+```
+###Make prediction of the real test set
+
+
+
+```{r highlight=TRUE}
+pred_real_test <- predict(model_1, test_3)
+
+pred_real_test
+```
+
+
+
+
+
